@@ -1,0 +1,126 @@
+import { CheckCircle2, Star, Globe, Calendar, Video } from 'lucide-react'
+import { DOCTORS } from '../../data/doctors'
+import { Avatar } from '../../components/ui/Avatar'
+import { useBookingStore } from '../../store/bookingStore'
+
+export function DoctorSelectionPage() {
+  const selectDoctor = useBookingStore((s) => s.selectDoctor)
+
+  const getAvailableCount = (doctorId: string) => {
+    const doc = DOCTORS.find((d) => d.id === doctorId)
+    return doc?.availableSlots.filter((s) => s.available).length ?? 0
+  }
+
+  return (
+    <div>
+      {/* Page header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-1">Choose Your Doctor</h1>
+        <p className="text-gray-500">Review specialists and choose who should handle the consultation.</p>
+      </div>
+
+      {/* Doctor cards grid */}
+      <div className="flex flex-col gap-5">
+        {DOCTORS.map((doctor) => {
+          const available = getAvailableCount(doctor.id)
+          return (
+            <div
+              key={doctor.id}
+              className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:border-teal-200 hover:shadow-md transition-all duration-200 overflow-hidden"
+            >
+              <div className="p-6 flex gap-6">
+                {/* Avatar column */}
+                <div className="flex flex-col items-center gap-2 min-w-[90px]">
+                  <Avatar initials={doctor.avatar} size="lg" online />
+                  <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest text-center">
+                    Video Specialist
+                  </span>
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  {/* Name row */}
+                  <div className="flex items-start justify-between gap-4 mb-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-bold text-gray-900">{doctor.name}</h2>
+                      {doctor.isVerified && (
+                        <CheckCircle2 size={18} className="text-teal-500 flex-shrink-0" />
+                      )}
+                    </div>
+                    <span
+                      className={`text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wide flex-shrink-0 ${
+                        available > 0
+                          ? 'bg-teal-50 text-teal-700'
+                          : 'bg-gray-100 text-gray-400'
+                      }`}
+                    >
+                      {available} Slots Available
+                    </span>
+                  </div>
+
+                  <p className="text-teal-600 text-sm font-semibold mb-2">{doctor.specialty}</p>
+                  <p className="text-gray-500 text-sm leading-relaxed mb-4">{doctor.bio}</p>
+
+                  {/* Meta row */}
+                  <div className="flex gap-3 mb-4">
+                    <div className="flex-1 bg-gray-50 rounded-xl p-3">
+                      <div className="text-xs text-gray-400 mb-0.5">Experience</div>
+                      <div className="font-bold text-gray-800 text-sm">{doctor.experience}</div>
+                    </div>
+                    <div className="flex-1 bg-gray-50 rounded-xl p-3">
+                      <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+                        <Globe size={10} /> Languages
+                      </div>
+                      <div className="font-bold text-gray-800 text-sm">
+                        {doctor.languages.join(', ')}
+                      </div>
+                    </div>
+                    <div className="flex-1 bg-gray-50 rounded-xl p-3">
+                      <div className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+                        <Calendar size={10} /> Calendar Invite
+                      </div>
+                      <div className="font-bold text-gray-800 text-xs truncate">
+                        {doctor.calendarEmail.split('@')[0]}@...
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Rating + CTA */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex">
+                        {[...Array(5)].map((_, i) => (
+                          <Star
+                            key={i}
+                            size={15}
+                            className={
+                              i < Math.floor(doctor.rating)
+                                ? 'text-amber-400 fill-amber-400'
+                                : 'text-gray-200 fill-gray-200'
+                            }
+                          />
+                        ))}
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {doctor.rating} average consultation rating
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => selectDoctor(doctor)}
+                      disabled={available === 0}
+                      className="flex items-center gap-2 bg-gray-900 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-colors cursor-pointer"
+                    >
+                      <Video size={15} />
+                      Book Video Consultation
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
