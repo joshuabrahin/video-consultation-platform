@@ -98,7 +98,14 @@ export function PatientDetailsForm() {
                 type="email"
                 icon={<Mail size={14} />}
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onChange={(e) => {
+                  setForm({ ...form, email: e.target.value })
+                  if (errors.email) setErrors((prev) => ({ ...prev, email: '' }))
+                }}
+                onBlur={() => {
+                  if (form.email && !/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(form.email))
+                    setErrors((prev) => ({ ...prev, email: 'Enter a valid email address (e.g. john@example.com)' }))
+                }}
                 error={errors.email}
               />
             </div>
@@ -109,7 +116,15 @@ export function PatientDetailsForm() {
               type="tel"
               icon={<Phone size={14} />}
               value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              onChange={(e) => {
+                const cleaned = e.target.value.replace(/[^0-9+\s\-().]/g, '')
+                setForm({ ...form, phone: cleaned })
+                if (errors.phone) setErrors((prev) => ({ ...prev, phone: '' }))
+              }}
+              onKeyDown={(e) => {
+                const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','Home','End']
+                if (!allowed.includes(e.key) && !/^[0-9+\s\-().]$/.test(e.key)) e.preventDefault()
+              }}
               error={errors.phone}
             />
 
