@@ -39,14 +39,25 @@ model User {
 }
 
 model Booking {
-  id           Int      @id @default(autoincrement())
+  id           Int           @id @default(autoincrement())
   name         String
   problem      String
   prescription String?
   date         DateTime
   meetLink     String
+  status       BookingStatus @default(UPCOMING)
+  recallBotId  String?       // Recall.ai bot ID assigned at booking time
+  transcript   String?       // Raw transcript text from Recall.ai
+  summary      String?       // AI-generated consultation summary
   userId       Int
   doctorId     Int
-  user         User     @relation(fields: [userId], references: [id])
-  doctor       Doctor   @relation(fields: [doctorId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  doctor       Doctor        @relation(fields: [doctorId], references: [id])
+}
+
+enum BookingStatus {
+  UPCOMING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
 }

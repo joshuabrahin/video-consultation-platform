@@ -1,6 +1,7 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { GoogleCalendarService } from './google-calendar.service.js'
+import { RecallService } from '../recall/recall.service.js'
 
 export interface VideoConsultationDto {
   doctor: { id: number }
@@ -20,6 +21,7 @@ export class BookingService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly googleCalendar: GoogleCalendarService,
+    private readonly recall: RecallService,
   ) {}
 
   async createVideoConsultation(dto: VideoConsultationDto, userId: number) {
@@ -31,11 +33,11 @@ export class BookingService {
     })
     if (!doctor) throw new NotFoundException('Doctor not found')
 
-    // 2. Google Service Account — freebusy.query on platform's primary scheduling calendar
+    // 2. Google Calendar freebusy check via Service Account
     await this.googleCalendar.checkAvailability(startDate)
 
     // 3. Transaction: 30-minute window overlap check + atomic insert
-    return this.prisma.db.$transaction(async (tx) => {
+    const booking = await this.prisma.db.$transaction(async (tx) => {
       const windowStart = new Date(startDate.getTime() - 29 * 60 * 1000)
       const windowEnd = new Date(startDate.getTime() + 29 * 60 * 1000)
 
@@ -66,11 +68,34 @@ export class BookingService {
         },
       })
     })
+
+    // 4. Schedule Recall.ai bot to join the meeting at the start time
+    //    This runs outside the transaction — bot failure should not roll back the booking.
+    const botId = await this.recall.scheduleBot(booking.meetLink, startDate, booking.id)
+
+    if (botId) {
+      await this.prisma.db.booking.update({
+        where: { id: booking.id },
+        data: { recallBotId: botId },
+      })
+      return { ...booking, recallBotId: botId }
+    }
+
+    return booking
   }
 
   async findByUser(userId: number) {
     return this.prisma.db.booking.findMany({
       where: { userId },
+      include: { doctor: true },
+      orderBy: { date: 'desc' },
+    })
+  }
+
+  /** Returns a single booking with its summary (used by the chat service). */
+  async findWithSummary(bookingId: number) {
+    return this.prisma.db.booking.findUnique({
+      where: { id: bookingId },
       include: { doctor: true },
     })
   }

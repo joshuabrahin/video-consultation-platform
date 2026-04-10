@@ -7,6 +7,8 @@ import { HospitalModule } from './hospital/hospital.module.js'
 import { DoctorModule } from './doctor/doctor.module.js'
 import { BookingModule } from './booking/booking.module.js'
 import { AuthModule } from './auth/auth.module.js'
+import { ChatModule } from './chat/chat.module.js'
+import { WebhookModule } from './webhook/webhook.module.js'
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { AuthModule } from './auth/auth.module.js'
     DoctorModule,
     BookingModule,
     AuthModule,
+    ChatModule,
+    WebhookModule,
   ],
   controllers: [AppController],
   providers: [AppService],
