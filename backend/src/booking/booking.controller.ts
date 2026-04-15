@@ -1,22 +1,21 @@
-import { Controller, Get, Post, Body, Param, ParseIntPipe, UseGuards, Req } from '@nestjs/common'
-import type { Request } from 'express'
+import { Controller, Get, Post, Body, Query } from '@nestjs/common'
 import { BookingService } from './booking.service.js'
 import type { VideoConsultationDto } from './booking.service.js'
-import { JwtAuthGuard } from '../auth/jwt.guard.js'
 
 @Controller('bookings')
 export class BookingController {
   constructor(private readonly bookingService: BookingService) {}
 
-  @UseGuards(JwtAuthGuard)
+  // No auth required — open booking endpoint
   @Post('video-consultation')
-  createVideoConsultation(@Body() body: VideoConsultationDto, @Req() req: Request) {
-    const userId = (req as any).user.sub as number
-    return this.bookingService.createVideoConsultation(body, userId)
+  createVideoConsultation(@Body() body: VideoConsultationDto) {
+    return this.bookingService.createVideoConsultation(body)
   }
 
-  @Get('user/:userId')
-  findByUser(@Param('userId', ParseIntPipe) userId: number) {
-    return this.bookingService.findByUser(userId)
+  // Look up bookings by patient email (used by UpcomingConsultations on home screen)
+  @Get('by-email')
+  findByEmail(@Query('email') email: string) {
+    if (!email) return []
+    return this.bookingService.findByEmail(email)
   }
 }

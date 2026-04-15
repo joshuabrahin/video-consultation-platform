@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -41,18 +36,22 @@ model User {
 model Booking {
   id           Int           @id @default(autoincrement())
   name         String
+  patientEmail String?
   problem      String
   prescription String?
   date         DateTime
   meetLink     String
   status       BookingStatus @default(UPCOMING)
-  recallBotId  String?       // Recall.ai bot ID assigned at booking time
-  transcript   String?       // Raw transcript text from Recall.ai
-  summary      String?       // AI-generated consultation summary
-  userId       Int
+  recallBotId  String?
+  transcript   String?
+  summary      String?
+  userId       Int?
   doctorId     Int
-  user         User          @relation(fields: [userId], references: [id])
+  user         User?         @relation(fields: [userId], references: [id])
   doctor       Doctor        @relation(fields: [doctorId], references: [id])
+
+  @@index([doctorId, date])
+  @@index([patientEmail])
 }
 
 enum BookingStatus {

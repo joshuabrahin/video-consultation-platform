@@ -3,52 +3,140 @@ import { useNavigate } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { CheckCircle2, Video, Calendar, Clock, Mail, Copy, ExternalLink, Loader2 } from 'lucide-react'
 import { useBookingStore } from '../../store/bookingStore'
+import { useChatStore } from '../../store/useChatStore'
+import { apiPost } from '../../lib/api'
 import { Booking } from '../../types'
 import { Avatar } from '../../components/ui/Avatar'
 
-async function createGoogleCalendarEvent(): Promise<{ meetLink: string; eventId: string }> {
-  await new Promise((r) => setTimeout(r, 2200))
-  const chars = 'abcdefghijklmnopqrstuvwxyz'
-  const seg = (n: number) => Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-  return { meetLink: `https://meet.google.com/${seg(3)}-${seg(4)}-${seg(3)}`, eventId: `evt_${Date.now()}` }
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Converts a date string ('yyyy-MM-dd') + time string ('09:00 AM') into a
+ * full UTC ISO-8601 string so the backend always receives unambiguous time,
+ * regardless of server timezone.
+ */
+function slotToISO(date: string, startTime: string): string {
+  const [time, meridiem] = startTime.split(' ')
+  const [hoursStr, minutesStr] = time.split(':')
+  let hours = parseInt(hoursStr, 10)
+  const minutes = parseInt(minutesStr, 10)
+  if (meridiem === 'PM' && hours !== 12) hours += 12
+  if (meridiem === 'AM' && hours === 12) hours = 0
+  // Build a local Date, then let toISOString() convert to UTC with Z suffix.
+  // This ensures the stored time matches what the user selected in their timezone.
+  const local = new Date(
+    parseInt(date.slice(0, 4)),   // year
+    parseInt(date.slice(5, 7)) - 1, // month (0-indexed)
+    parseInt(date.slice(8, 10)),  // day
+    hours,
+    minutes,
+  )
+  return local.toISOString()
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Backend response shape
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface CreateBookingResponse {
+  id: number
+  meetLink: string
+  date: string
+  status: string
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Loading steps shown during booking creation
+// ─────────────────────────────────────────────────────────────────────────────
 
 const LOADING_STEPS = [
   'Verifying slot availability',
   'Creating Google Calendar event',
   'Generating Meet link',
-  'Sending calendar invites',
+  'Scheduling Recall.ai scribe',
 ]
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Component
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function ConfirmationPage() {
   const navigate = useNavigate()
   const { selectedDoctor, selectedSlot, patientDetails, addBooking, reset } = useBookingStore()
+  const setContext = useChatStore((s) => s.setContext)
+
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
+  const [errorMsg, setErrorMsg] = useState<string>('')
   const [booking, setBooking] = useState<Booking | null>(null)
   const [copied, setCopied] = useState(false)
   const [loadingStep, setLoadingStep] = useState(0)
 
+  // Guard: if booking state is empty (e.g. direct URL navigation), go back to step 1
+  useEffect(() => {
+    if (!selectedDoctor || !selectedSlot || !patientDetails) {
+      navigate('/book', { replace: true })
+      return
+    }
+  }, [selectedDoctor, selectedSlot, patientDetails, navigate])
+
   useEffect(() => {
     if (!selectedDoctor || !selectedSlot || !patientDetails) return
-    // Animate through loading steps
+
+    // Animate through loading steps while the request runs
     const timers = LOADING_STEPS.map((_, i) =>
-      setTimeout(() => setLoadingStep(i), i * 550)
+      setTimeout(() => setLoadingStep(i), i * 600),
     )
-    createGoogleCalendarEvent().then(({ meetLink, eventId }) => {
-      const newBooking: Booking = {
-        id: `booking-${Date.now()}`,
-        doctor: selectedDoctor,
-        slot: selectedSlot,
-        patient: patientDetails,
-        meetLink,
-        calendarEventId: eventId,
-        status: 'confirmed',
-        createdAt: new Date().toISOString(),
+
+    const run = async () => {
+      try {
+        const startISO = slotToISO(selectedSlot.date, selectedSlot.startTime)
+
+        const data = await apiPost<CreateBookingResponse>('/bookings/video-consultation', {
+          doctor: {
+            id: selectedDoctor.backendId,
+            calendarEmail: selectedDoctor.calendarEmail,
+          },
+          patient: {
+            name:    patientDetails.name,
+            email:   patientDetails.email,
+            problem: patientDetails.problem,
+            ...(patientDetails.prescription instanceof File
+              ? {}
+              : { prescription: patientDetails.prescription ?? undefined }),
+          },
+          start: startISO,
+        })
+
+        const newBooking: Booking = {
+          id: `booking-${data.id}`,
+          backendId: data.id,
+          doctor: selectedDoctor,
+          slot: selectedSlot,
+          patient: patientDetails,
+          meetLink: data.meetLink,
+          status: 'confirmed',
+          createdAt: new Date().toISOString(),
+        }
+
+        addBooking(newBooking)
+        setBooking(newBooking)
+
+        // Give the AI chat context so "summarize my consultation" works immediately
+        setContext({
+          bookingId: String(data.id),
+          doctorName: selectedDoctor.name,
+        })
+
+        setStatus('success')
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : 'Booking failed')
+        setStatus('error')
       }
-      addBooking(newBooking)
-      setBooking(newBooking)
-      setStatus('success')
-    }).catch(() => setStatus('error'))
+    }
+
+    void run()
     return () => timers.forEach(clearTimeout)
   }, [])
 
@@ -75,7 +163,7 @@ export function ConfirmationPage() {
           <Loader2 size={36} className="text-teal-500 animate-spin" />
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Creating your booking</h2>
-        <p className="text-gray-400 text-sm mb-10">Generating Google Meet link and sending calendar invites…</p>
+        <p className="text-gray-400 text-sm mb-10">Generating Google Meet link and scheduling the Recall.ai scribe…</p>
         <div className="flex flex-col gap-3 text-left bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
           {LOADING_STEPS.map((step, i) => (
             <div key={i} className="flex items-center gap-3">
@@ -84,7 +172,9 @@ export function ConfirmationPage() {
               ) : (
                 <div className="w-4 h-4 rounded-full border-2 border-gray-200 flex-shrink-0" />
               )}
-              <span className={`text-sm ${i <= loadingStep ? 'text-gray-800 font-medium' : 'text-gray-400'}`}>{step}</span>
+              <span className={`text-sm ${i <= loadingStep ? 'text-gray-800 font-medium' : 'text-gray-400'}`}>
+                {step}
+              </span>
             </div>
           ))}
         </div>
@@ -98,8 +188,16 @@ export function ConfirmationPage() {
       <div className="max-w-md mx-auto text-center py-20">
         <div className="text-5xl mb-4">😕</div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h2>
-        <p className="text-gray-400 text-sm mb-6">We couldn't create the calendar event. Please try again.</p>
-        <button onClick={handleDone} className="bg-gray-900 text-white font-semibold px-6 py-3 rounded-full text-sm hover:bg-gray-800 transition-colors cursor-pointer">
+        <p className="text-gray-500 text-sm mb-2">We couldn't confirm your booking.</p>
+        {errorMsg && (
+          <p className="text-red-500 text-xs bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-6 text-left">
+            {errorMsg}
+          </p>
+        )}
+        <button
+          onClick={handleDone}
+          className="bg-gray-900 text-white font-semibold px-6 py-3 rounded-full text-sm hover:bg-gray-800 transition-colors cursor-pointer"
+        >
           Back to Home
         </button>
       </div>
@@ -119,7 +217,7 @@ export function ConfirmationPage() {
           <div>
             <h1 className="text-2xl font-bold mb-1">Booking Confirmed!</h1>
             <p className="text-teal-100 text-sm">
-              Calendar invites have been sent to both the patient and doctor. Your Google Meet link is ready.
+              Your booking is saved and the AI medical scribe has been scheduled to join the call.
             </p>
           </div>
         </div>
@@ -173,8 +271,10 @@ export function ConfirmationPage() {
               <code className="flex-1 bg-white border border-teal-200 rounded-xl px-3 py-2.5 text-sm text-teal-700 font-mono truncate">
                 {booking.meetLink}
               </code>
-              <button onClick={handleCopy}
-                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-teal-200 rounded-xl text-xs font-semibold text-teal-600 hover:bg-teal-100 transition-colors cursor-pointer flex-shrink-0">
+              <button
+                onClick={handleCopy}
+                className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-teal-200 rounded-xl text-xs font-semibold text-teal-600 hover:bg-teal-100 transition-colors cursor-pointer flex-shrink-0"
+              >
                 <Copy size={13} /> {copied ? 'Copied!' : 'Copy'}
               </button>
             </div>
@@ -191,8 +291,10 @@ export function ConfirmationPage() {
             </button>
           </a>
         )}
-        <button onClick={handleDone}
-          className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-xl text-sm transition-colors cursor-pointer">
+        <button
+          onClick={handleDone}
+          className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-xl text-sm transition-colors cursor-pointer"
+        >
           Back to Dashboard
         </button>
       </div>

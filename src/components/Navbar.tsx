@@ -26,7 +26,7 @@ export function Navbar() {
       </div>
 
       <Button onClick={() => navigate('/book')} size="md">
-        Get Started
+        Book Consultation
       </Button>
     </nav>
   )

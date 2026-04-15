@@ -32,9 +32,12 @@ function generateSlots(doctorId: string, count: number) {
   return slots
 }
 
+// backendId must match the doctor's integer primary key in the database.
+// Seed your DB with these five doctors so IDs line up.
 export const DOCTORS: Doctor[] = [
   {
     id: 'dr-sarah-jenkins',
+    backendId: 1,
     name: 'Dr. Sarah Jenkins',
     specialty: 'Cardiologist',
     experience: '12 years',
@@ -49,6 +52,7 @@ export const DOCTORS: Doctor[] = [
   },
   {
     id: 'dr-marcus-webb',
+    backendId: 2,
     name: 'Dr. Marcus Webb',
     specialty: 'General Physician',
     experience: '9 years',
@@ -63,6 +67,7 @@ export const DOCTORS: Doctor[] = [
   },
   {
     id: 'dr-priya-nair',
+    backendId: 3,
     name: 'Dr. Priya Nair',
     specialty: 'Dermatologist',
     experience: '8 years',
@@ -77,6 +82,7 @@ export const DOCTORS: Doctor[] = [
   },
   {
     id: 'dr-james-okafor',
+    backendId: 4,
     name: 'Dr. James Okafor',
     specialty: 'Neurologist',
     experience: '15 years',
@@ -91,6 +97,7 @@ export const DOCTORS: Doctor[] = [
   },
   {
     id: 'dr-emily-chen',
+    backendId: 5,
     name: 'Dr. Emily Chen',
     specialty: 'Pediatrician',
     experience: '11 years',

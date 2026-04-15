@@ -1,12 +1,97 @@
+import { useEffect, useState } from 'react'
 import { format, parseISO } from 'date-fns'
 import { Calendar, Clock, User, Mail, FileText, Video, X, Stethoscope } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useBookingStore } from '../store/bookingStore'
+import { apiGet } from '../lib/api'
 import { Button } from './ui/Button'
 import { Badge } from './ui/Badge'
 import { Avatar } from './ui/Avatar'
 import { Booking } from '../types'
 
-function BookingCard({ booking }: { booking: Booking }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Backend booking shape returned by GET /bookings/user/:userId
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface BackendBooking {
+  id: number
+  name: string
+  problem: string
+  date: string
+  meetLink: string
+  status: 'UPCOMING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
+  doctor: {
+    id: number
+    name: string
+    specialization: string
+  }
+}
+
+// Map a backend booking to the frontend Booking type for rendering.
+// Times are displayed in the CLIENT's local timezone (matching what the user booked).
+function adaptBackendBooking(b: BackendBooking): Booking {
+  const date = new Date(b.date)
+  // Use local-time accessors so times display correctly in the user's timezone
+  const hours = date.getHours()
+  const minutes = date.getMinutes()
+  const meridiem = hours >= 12 ? 'PM' : 'AM'
+  const h12 = hours % 12 === 0 ? 12 : hours % 12
+  const startTime = `${String(h12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${meridiem}`
+  const endDate = new Date(date.getTime() + 30 * 60 * 1000)
+  const endHours = endDate.getHours()
+  const eh12 = endHours % 12 === 0 ? 12 : endHours % 12
+  const eMeridiem = endHours >= 12 ? 'PM' : 'AM'
+  const endTime = `${String(eh12).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')} ${eMeridiem}`
+
+  const avatarInitials = b.doctor.name
+    .split(' ')
+    .filter((w) => w.length > 0)
+    .map((w) => w[0].toUpperCase())
+    .slice(0, 2)
+    .join('')
+
+  return {
+    id: `backend-${b.id}`,
+    backendId: b.id,
+    doctor: {
+      id: `backend-doctor-${b.doctor.id}`,
+      backendId: b.doctor.id,
+      name: b.doctor.name,
+      specialty: b.doctor.specialization,
+      experience: '',
+      languages: [],
+      calendarEmail: '',
+      bio: '',
+      rating: 0,
+      reviewCount: 0,
+      avatar: avatarInitials,
+      isVerified: true,
+      availableSlots: [],
+    },
+    slot: {
+      id: `backend-slot-${b.id}`,
+      date: format(date, 'yyyy-MM-dd'),
+      startTime,
+      endTime,
+      available: false,
+    },
+    patient: {
+      name: b.name,
+      email: '',
+      phone: '',
+      problem: b.problem,
+    },
+    meetLink: b.meetLink,
+    status: b.status === 'CANCELLED' ? 'cancelled' : 'confirmed',
+    createdAt: b.date,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BookingCard
+// ─────────────────────────────────────────────────────────────────────────────
+
+function BookingCard({ booking, isReal }: { booking: Booking; isReal?: boolean }) {
   const cancelBooking = useBookingStore((s) => s.cancelBooking)
 
   const dateLabel = (() => {
@@ -39,9 +124,9 @@ function BookingCard({ booking }: { booking: Booking }) {
               </div>
             </div>
           </div>
-          <Badge variant="green">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            Demo Booking
+          <Badge variant={isReal ? 'teal' : 'green'}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isReal ? 'bg-teal-500' : 'bg-green-500'}`} />
+            {isReal ? 'Confirmed' : 'Demo Booking'}
           </Badge>
         </div>
 
@@ -69,16 +154,19 @@ function BookingCard({ booking }: { booking: Booking }) {
               Patient
             </div>
             <p className="font-semibold text-gray-800 text-sm">{booking.patient.name}</p>
-            <p className="text-gray-400 text-xs">{booking.patient.phone}</p>
+            {booking.patient.phone && (
+              <p className="text-gray-400 text-xs">{booking.patient.phone}</p>
+            )}
           </div>
-          <div className="bg-gray-50 rounded-xl p-3">
-            <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
-              <Mail size={12} />
-              Invitee Email
+          {booking.patient.email && (
+            <div className="bg-gray-50 rounded-xl p-3">
+              <div className="flex items-center gap-1.5 text-gray-400 text-xs mb-1">
+                <Mail size={12} />
+                Invitee Email
+              </div>
+              <p className="font-semibold text-gray-800 text-sm truncate">{booking.patient.email}</p>
             </div>
-            <p className="font-semibold text-gray-800 text-sm truncate">{booking.patient.email}</p>
-            <p className="text-gray-400 text-xs truncate">{booking.doctor.calendarEmail}</p>
-          </div>
+          )}
         </div>
 
         {/* Notes */}
@@ -88,10 +176,12 @@ function BookingCard({ booking }: { booking: Booking }) {
               Consultation Notes
             </p>
             <p className="text-gray-700 text-sm leading-relaxed">{booking.patient.problem}</p>
-            <button className="flex items-center gap-1.5 mt-2 text-xs text-teal-600 hover:text-teal-700 font-medium">
-              <FileText size={12} />
-              cbc-report.pdf
-            </button>
+            {!isReal && (
+              <button className="flex items-center gap-1.5 mt-2 text-xs text-teal-600 hover:text-teal-700 font-medium">
+                <FileText size={12} />
+                cbc-report.pdf
+              </button>
+            )}
           </div>
         )}
 
@@ -103,26 +193,57 @@ function BookingCard({ booking }: { booking: Booking }) {
             rel="noopener noreferrer"
             className="flex-1"
           >
-            <button className="w-full flex items-center justify-center gap-2 bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors">
+            <button className="w-full flex items-center justify-center gap-2 bg-teal-500 hover:bg-teal-600 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors cursor-pointer">
               <Video size={16} />
               Join Now
             </button>
           </a>
-          <button
-            onClick={() => cancelBooking(booking.id)}
-            className="w-10 h-10 flex items-center justify-center rounded-xl border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-          >
-            <X size={16} />
-          </button>
+          {!isReal && (
+            <button
+              onClick={() => cancelBooking(booking.id)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-500 transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
       </div>
     </div>
   )
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// UpcomingConsultations
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function UpcomingConsultations() {
-  const { bookings, openModal } = useBookingStore()
-  const activeBookings = bookings.filter((b) => b.status !== 'cancelled')
+  const navigate = useNavigate()
+  const { bookings } = useBookingStore()
+  const [realBookings, setRealBookings] = useState<Booking[]>([])
+
+  // Derive the most recently used patient email from local bookings
+  // so we can fetch the latest DB state without requiring login
+  const lastEmail = bookings
+    .filter((b) => b.patient.email)
+    .at(0)?.patient.email
+
+  useEffect(() => {
+    if (!lastEmail) return
+    apiGet<BackendBooking[]>(`/bookings/by-email?email=${encodeURIComponent(lastEmail)}`)
+      .then((data) => setRealBookings(data.map(adaptBackendBooking)))
+      .catch(() => { /* silent — show local store bookings on error */ })
+  }, [lastEmail])
+
+  // Local bookings not yet synced to the backend
+  const localActive = bookings.filter((b) => b.status !== 'cancelled' && !b.backendId)
+
+  // Backend bookings (deduped against local store)
+  const realActive = realBookings.filter(
+    (rb) => rb.status !== 'cancelled' &&
+      !bookings.some((lb) => lb.backendId === rb.backendId),
+  )
+
+  const allActive = [...realActive, ...localActive]
 
   return (
     <section className="py-20 px-6" style={{ background: 'linear-gradient(180deg, #f8f9fa 0%, #fff8f0 100%)' }}>
@@ -141,7 +262,7 @@ export function UpcomingConsultations() {
         <div className="flex gap-8 items-start">
           {/* Bookings list */}
           <div className="flex-1">
-            {activeBookings.length === 0 ? (
+            {allActive.length === 0 ? (
               <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
                 <div className="w-16 h-16 bg-teal-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <Calendar size={28} className="text-teal-400" />
@@ -150,15 +271,18 @@ export function UpcomingConsultations() {
                 <p className="text-gray-400 text-sm mb-6">
                   Book your first video consultation with one of our specialists.
                 </p>
-                <Button variant="secondary" onClick={openModal}>
+                <Button variant="secondary" onClick={() => navigate('/book')}>
                   <Video size={16} />
                   Book Now
                 </Button>
               </div>
             ) : (
               <div className="flex flex-col gap-4">
-                {activeBookings.map((booking) => (
-                  <BookingCard key={booking.id} booking={booking} />
+                {realActive.map((b) => (
+                  <BookingCard key={b.id} booking={b} isReal />
+                ))}
+                {localActive.map((b) => (
+                  <BookingCard key={b.id} booking={b} isReal={false} />
                 ))}
               </div>
             )}

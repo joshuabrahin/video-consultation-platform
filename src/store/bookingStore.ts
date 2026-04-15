@@ -33,6 +33,7 @@ export const useBookingStore = create<BookingState>()(
           id: 'demo-booking-1',
           doctor: {
             id: 'dr-marcus-webb',
+            backendId: 2,
             name: 'Dr. Marcus Webb',
             specialty: 'General Physician',
             experience: '9 years',

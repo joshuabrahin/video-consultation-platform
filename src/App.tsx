@@ -30,7 +30,6 @@ function App() {
         <Route path="/book" element={<BookingPage />} />
       </Routes>
 
-      {/* AI chat — floats above all pages */}
       <ChatBubble />
       <ChatPanel />
     </>
