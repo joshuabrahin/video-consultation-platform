@@ -64,6 +64,38 @@ export class GoogleCalendarService {
     })
   }
 
+  // ── Busy intervals from the real booking calendar (GOOGLE_CALENDAR_ID) ───────
+
+  async getBusyIntervals(date: string): Promise<{ start: Date; end: Date }[]> {
+    const clientId     = process.env.GOOGLE_OAUTH_CLIENT_ID
+    const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN
+    const calendarId   = process.env.GOOGLE_CALENDAR_ID ?? 'primary'
+
+    if (!clientId || !clientSecret || !refreshToken) return []
+
+    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret)
+    oauth2Client.setCredentials({ refresh_token: refreshToken })
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
+
+    const slots  = buildDaySlots(date)
+    const timeMin = slots[0].start.toISOString()
+    const timeMax = slots[slots.length - 1].end.toISOString()
+
+    try {
+      const fbRes = await calendar.freebusy.query({
+        requestBody: { timeMin, timeMax, items: [{ id: calendarId }] },
+      })
+      return (fbRes.data.calendars?.[calendarId]?.busy ?? []).map((b) => ({
+        start: new Date(b.start!),
+        end:   new Date(b.end!),
+      }))
+    } catch {
+      this.logger.warn('getBusyIntervals failed — returning empty')
+      return []
+    }
+  }
+
   // ── Create meeting event ──────────────────────────────────────────────────────
 
   async createMeetingEvent(params: CreateMeetingParams): Promise<MeetingResult> {

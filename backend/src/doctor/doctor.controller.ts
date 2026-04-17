@@ -25,6 +25,18 @@ export class DoctorController {
     return this.doctorService.findByHospital(hospitalId)
   }
 
+  // Returns slots from DB for a specific date
+  @Get(':id/slots')
+  async getSlots(
+    @Param('id') id: string,
+    @Query('date') date: string,
+  ) {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new BadRequestException('date query param required (YYYY-MM-DD)')
+    }
+    return this.doctorService.getSlotsForDate(id, date)
+  }
+
   // Returns slot availability based on doctor's real Google Calendar
   @Get(':id/availability')
   async getAvailability(

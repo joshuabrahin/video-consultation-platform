@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common'
+import { Injectable, ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { GoogleCalendarService } from './google-calendar.service.js'
 import { RecallService } from '../recall/recall.service.js'
@@ -28,15 +28,27 @@ export class BookingService {
     if (!doctor) throw new NotFoundException('Doctor not found')
 
     // 2. Google Calendar: freebusy check + create real event with Meet link
-    //    Falls back to a generated link when credentials are not configured.
-    const { meetLink, calendarEventId } = await this.googleCalendar.createMeetingEvent({
-      start: startDate,
-      doctorName: doctor.name,
-      doctorEmail: dto.doctor.calendarEmail,
-      patientName: dto.patient.name,
-      patientEmail: dto.patient.email,
-      problem: dto.patient.problem,
-    })
+    let meetLink: string
+    let calendarEventId: string | undefined
+    try {
+      const result = await this.googleCalendar.createMeetingEvent({
+        start: startDate,
+        doctorName: doctor.name,
+        doctorEmail: dto.doctor.calendarEmail,
+        patientName: dto.patient.name,
+        patientEmail: dto.patient.email,
+        problem: dto.patient.problem,
+      })
+      meetLink        = result.meetLink
+      calendarEventId = result.calendarEventId
+    } catch (err: any) {
+      if (err?.code === 'ENOTFOUND' || err?.cause?.code === 'ENOTFOUND') {
+        throw new ServiceUnavailableException(
+          'Cannot reach Google Calendar — please check your internet connection and try again.',
+        )
+      }
+      throw err
+    }
 
     // 3. Transaction: DB-level 30-minute overlap check + atomic insert
     const booking = await this.prisma.db.$transaction(async (tx) => {
@@ -57,6 +69,12 @@ export class BookingService {
         )
       }
 
+      // Mark matching slot as booked
+      await tx.slot.updateMany({
+        where: { doctorId: dto.doctor.id, startAt: startDate },
+        data:  { isBooked: true },
+      })
+
       return tx.booking.create({
         data: {
           name:         dto.patient.name,
@@ -66,7 +84,6 @@ export class BookingService {
           date:         startDate,
           meetLink,
           doctorId:     dto.doctor.id,
-          // userId is optional — no login required
         },
         include: { doctor: true },
       })
