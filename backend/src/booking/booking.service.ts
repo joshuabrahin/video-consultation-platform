@@ -114,4 +114,12 @@ export class BookingService {
       include: { doctor: true },
     })
   }
+
+  async getBookedSlots(doctorId: string): Promise<string[]> {
+    const bookings = await this.prisma.db.booking.findMany({
+      where: { doctorId, status: { not: 'CANCELLED' } },
+      select: { date: true },
+    })
+    return bookings.map((b) => b.date.toISOString())
+  }
 }

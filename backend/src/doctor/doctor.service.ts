@@ -24,4 +24,8 @@ export class DoctorService {
       orderBy: { name: 'asc' },
     })
   }
+
+  async findById(id: string) {
+    return this.prisma.db.doctor.findUnique({ where: { id } })
+  }
 }

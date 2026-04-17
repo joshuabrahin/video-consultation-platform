@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query } from '@nestjs/common'
+import { Controller, Get, Post, Body, Query, Param } from '@nestjs/common'
 import { BookingService } from './booking.service.js'
 import { VideoConsultationDto } from './dto/create-booking.dto.js'
 
@@ -17,5 +17,11 @@ export class BookingController {
   findByEmail(@Query('email') email: string) {
     if (!email) return []
     return this.bookingService.findByEmail(email)
+  }
+
+  // Returns ISO datetime strings of booked slots for a doctor (for slot availability display)
+  @Get('booked-slots/:doctorId')
+  getBookedSlots(@Param('doctorId') doctorId: string) {
+    return this.bookingService.getBookedSlots(doctorId)
   }
 }

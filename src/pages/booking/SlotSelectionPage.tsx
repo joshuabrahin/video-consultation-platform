@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ChevronLeft, Calendar, Clock, Mail } from 'lucide-react'
 import { useBookingStore } from '../../store/bookingStore'
@@ -9,15 +9,30 @@ import { TimeSlot } from '../../types'
 export function SlotSelectionPage() {
   const { selectedDoctor, selectSlot, setStep } = useBookingStore()
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [busyTimes, setBusyTimes] = useState<Set<string>>(new Set())
+  const [loadingAvailability, setLoadingAvailability] = useState(false)
 
-  if (!selectedDoctor) return null
-
-  const allSlots = selectedDoctor.availableSlots
+  const allSlots = selectedDoctor?.availableSlots ?? []
   const uniqueDates = [...new Set(allSlots.map((s) => s.date))].sort()
   const activeDateStr = selectedDate ?? uniqueDates[0] ?? null
 
+  useEffect(() => {
+    if (!selectedDoctor || !activeDateStr) return
+    setLoadingAvailability(true)
+    fetch(`/api/doctors/${selectedDoctor.id}/availability?date=${activeDateStr}`)
+      .then((r) => r.json() as Promise<{ startTime: string; available: boolean }[]>)
+      .then((slots) => setBusyTimes(new Set(slots.filter((s) => !s.available).map((s) => s.startTime))))
+      .catch(() => setBusyTimes(new Set()))
+      .finally(() => setLoadingAvailability(false))
+  }, [selectedDoctor?.id, activeDateStr])
+
+  if (!selectedDoctor) return null
+
   const slotsForDate: TimeSlot[] = activeDateStr
-    ? allSlots.filter((s) => s.date === activeDateStr)
+    ? allSlots.filter((s) => s.date === activeDateStr).map((s) => ({
+        ...s,
+        available: s.available && !busyTimes.has(s.startTime),
+      }))
     : []
 
   const availableSlots = slotsForDate.filter((s) => s.available)
@@ -87,6 +102,9 @@ export function SlotSelectionPage() {
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-widest">
                   {format(parseISO(activeDateStr), 'MMMM d, yyyy')} — Available Times
                 </span>
+                {loadingAvailability && (
+                  <span className="text-xs text-teal-500 animate-pulse ml-2">Checking calendar…</span>
+                )}
               </div>
               {availableSlots.length === 0 ? (
                 <div className="text-center py-12 text-gray-400 bg-white rounded-2xl border border-gray-100">
@@ -115,7 +133,7 @@ export function SlotSelectionPage() {
                     {unavailableSlots.map((slot) => (
                       <div key={slot.id} className="flex flex-col items-center gap-0.5 py-4 px-3 rounded-xl border border-dashed border-gray-200 bg-gray-50">
                         <span className="text-base font-bold text-gray-300">{slot.startTime}</span>
-                        <span className="text-xs text-gray-200">to {slot.endTime}</span>
+                        <span className="text-xs text-red-300 font-semibold">Booked</span>
                       </div>
                     ))}
                   </div>
