@@ -6,6 +6,20 @@ import { Avatar } from '../../components/ui/Avatar'
 import { cn } from '../../lib/utils'
 import { TimeSlot } from '../../types'
 
+function isoToStartTime(iso: string): string {
+  const d    = new Date(iso)
+  const h24  = d.getHours()
+  const mins = d.getMinutes()
+  const ampm = h24 < 12 ? 'AM' : 'PM'
+  const h12  = h24 % 12 === 0 ? 12 : h24 % 12
+  return `${String(h12).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${ampm}`
+}
+
+function isoToDate(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function SlotSelectionPage() {
   const { selectedDoctor, selectSlot, setStep } = useBookingStore()
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -16,13 +30,30 @@ export function SlotSelectionPage() {
   const uniqueDates = [...new Set(allSlots.map((s) => s.date))].sort()
   const activeDateStr = selectedDate ?? uniqueDates[0] ?? null
 
+  // Fetch booked slots from DB — reliable for all doctors regardless of calendar email
+  useEffect(() => {
+    if (!selectedDoctor) return
+    fetch(`/api/bookings/booked-slots/${selectedDoctor.id}`)
+      .then((r) => r.json() as Promise<string[]>)
+      .then((isoList) => {
+        const keys = new Set(isoList.map((iso) => `${isoToDate(iso)}|${isoToStartTime(iso)}`))
+        setBusyTimes(keys)
+      })
+      .catch(() => setBusyTimes(new Set()))
+  }, [selectedDoctor?.id])
+
+  // Also check real Google Calendar if doctor has a valid calendar email
   useEffect(() => {
     if (!selectedDoctor || !activeDateStr) return
     setLoadingAvailability(true)
     fetch(`/api/doctors/${selectedDoctor.id}/availability?date=${activeDateStr}`)
       .then((r) => r.json() as Promise<{ startTime: string; available: boolean }[]>)
-      .then((slots) => setBusyTimes(new Set(slots.filter((s) => !s.available).map((s) => s.startTime))))
-      .catch(() => setBusyTimes(new Set()))
+      .then((slots) => {
+        slots.filter((s) => !s.available).forEach((s) => {
+          setBusyTimes((prev) => new Set([...prev, `${activeDateStr}|${s.startTime}`]))
+        })
+      })
+      .catch(() => {/* calendar unavailable — DB check is enough */})
       .finally(() => setLoadingAvailability(false))
   }, [selectedDoctor?.id, activeDateStr])
 
@@ -31,7 +62,7 @@ export function SlotSelectionPage() {
   const slotsForDate: TimeSlot[] = activeDateStr
     ? allSlots.filter((s) => s.date === activeDateStr).map((s) => ({
         ...s,
-        available: s.available && !busyTimes.has(s.startTime),
+        available: s.available && !busyTimes.has(`${s.date}|${s.startTime}`),
       }))
     : []
 
@@ -131,9 +162,9 @@ export function SlotSelectionPage() {
                   <p className="text-xs text-gray-400 mb-2">Booked / Unavailable</p>
                   <div className="grid grid-cols-4 gap-3">
                     {unavailableSlots.map((slot) => (
-                      <div key={slot.id} className="flex flex-col items-center gap-0.5 py-4 px-3 rounded-xl border border-dashed border-gray-200 bg-gray-50">
-                        <span className="text-base font-bold text-gray-300">{slot.startTime}</span>
-                        <span className="text-xs text-red-300 font-semibold">Booked</span>
+                      <div key={slot.id} className="flex flex-col items-center gap-0.5 py-4 px-3 rounded-xl border border-dashed border-red-100 bg-red-50">
+                        <span className="text-base font-bold text-gray-300 line-through">{slot.startTime}</span>
+                        <span className="text-xs text-red-400 font-bold tracking-wide">Booked</span>
                       </div>
                     ))}
                   </div>
