@@ -1,61 +1,10 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common'
-import {
-  IsInt,
-  IsString,
-  IsDateString,
-  IsNotEmpty,
-  IsEmail,
-  MinLength,
-  ValidateNested,
-  IsOptional,
-} from 'class-validator'
-import { Type } from 'class-transformer'
 import { PrismaService } from '../prisma/prisma.service.js'
 import { GoogleCalendarService } from './google-calendar.service.js'
 import { RecallService } from '../recall/recall.service.js'
+import { VideoConsultationDto } from './dto/create-booking.dto.js'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DTO
-// ─────────────────────────────────────────────────────────────────────────────
-
-class DoctorRefDto {
-  @IsInt()
-  id!: number
-
-  @IsEmail()
-  @IsOptional()
-  calendarEmail?: string
-}
-
-class PatientInfoDto {
-  @IsString()
-  @IsNotEmpty()
-  name!: string
-
-  @IsEmail()
-  email!: string
-
-  @IsString()
-  @MinLength(5)
-  problem!: string
-
-  @IsString()
-  @IsOptional()
-  prescription?: string
-}
-
-export class VideoConsultationDto {
-  @ValidateNested()
-  @Type(() => DoctorRefDto)
-  doctor!: DoctorRefDto
-
-  @ValidateNested()
-  @Type(() => PatientInfoDto)
-  patient!: PatientInfoDto
-
-  @IsDateString()
-  start!: string
-}
+export { VideoConsultationDto }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Service
@@ -123,24 +72,30 @@ export class BookingService {
       })
     })
 
-    // 4. Schedule Recall.ai bot (skipped gracefully when key is absent)
-    const botId = await this.recall.scheduleBot(booking.meetLink, startDate, booking.id)
+    // 4. Re-fetch with doctor relation (Prisma $transaction doesn't infer includes)
+    const bookingFull = await this.prisma.db.booking.findUniqueOrThrow({
+      where: { id: booking.id },
+      include: { doctor: true },
+    })
+
+    // 5. Schedule Recall.ai bot (skipped gracefully when key is absent)
+    const botId = await this.recall.scheduleBot(bookingFull.meetLink, startDate, bookingFull.id)
     if (botId) {
       await this.prisma.db.booking.update({
-        where: { id: booking.id },
+        where: { id: bookingFull.id },
         data: { recallBotId: botId },
       })
     }
 
     return {
-      id:              booking.id,
-      meetLink:        booking.meetLink,
+      id:              bookingFull.id,
+      meetLink:        bookingFull.meetLink,
       calendarEventId: calendarEventId ?? null,
-      date:            booking.date,
-      doctor:          booking.doctor,
-      patientName:     booking.name,
-      patientEmail:    booking.patientEmail,
-      status:          booking.status,
+      date:            bookingFull.date,
+      doctor:          bookingFull.doctor,
+      patientName:     bookingFull.name,
+      patientEmail:    bookingFull.patientEmail,
+      status:          bookingFull.status,
     }
   }
 
@@ -153,7 +108,7 @@ export class BookingService {
     })
   }
 
-  async findWithSummary(bookingId: number) {
+  async findWithSummary(bookingId: string) {
     return this.prisma.db.booking.findUnique({
       where: { id: bookingId },
       include: { doctor: true },

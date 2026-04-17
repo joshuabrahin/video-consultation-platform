@@ -41,7 +41,7 @@ function slotToISO(date: string, startTime: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface CreateBookingResponse {
-  id: number
+  id: string
   meetLink: string
   date: string
   status: string
@@ -95,7 +95,7 @@ export function ConfirmationPage() {
 
         const data = await apiPost<CreateBookingResponse>('/bookings/video-consultation', {
           doctor: {
-            id: selectedDoctor.backendId,
+            id: selectedDoctor.id,           // UUID string from DB
             calendarEmail: selectedDoctor.calendarEmail,
           },
           patient: {
@@ -110,8 +110,7 @@ export function ConfirmationPage() {
         })
 
         const newBooking: Booking = {
-          id: `booking-${data.id}`,
-          backendId: data.id,
+          id: data.id,
           doctor: selectedDoctor,
           slot: selectedSlot,
           patient: patientDetails,

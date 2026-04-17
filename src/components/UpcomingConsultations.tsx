@@ -10,18 +10,19 @@ import { Avatar } from './ui/Avatar'
 import { Booking } from '../types'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Backend booking shape returned by GET /bookings/user/:userId
+// Backend booking shape returned by GET /bookings/by-email
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface BackendBooking {
-  id: number
+  id: string
   name: string
+  patientEmail: string
   problem: string
   date: string
   meetLink: string
   status: 'UPCOMING' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED'
   doctor: {
-    id: number
+    id: string
     name: string
     specialization: string
   }
@@ -51,11 +52,9 @@ function adaptBackendBooking(b: BackendBooking): Booking {
     .join('')
 
   return {
-    id: `backend-${b.id}`,
-    backendId: b.id,
+    id: b.id,
     doctor: {
-      id: `backend-doctor-${b.doctor.id}`,
-      backendId: b.doctor.id,
+      id: b.doctor.id,
       name: b.doctor.name,
       specialty: b.doctor.specialization,
       experience: '',
@@ -69,7 +68,7 @@ function adaptBackendBooking(b: BackendBooking): Booking {
       availableSlots: [],
     },
     slot: {
-      id: `backend-slot-${b.id}`,
+      id: `slot-${b.id}`,
       date: format(date, 'yyyy-MM-dd'),
       startTime,
       endTime,
@@ -77,7 +76,7 @@ function adaptBackendBooking(b: BackendBooking): Booking {
     },
     patient: {
       name: b.name,
-      email: '',
+      email: b.patientEmail,
       phone: '',
       problem: b.problem,
     },
@@ -234,14 +233,16 @@ export function UpcomingConsultations() {
       .catch(() => { /* silent — show local store bookings on error */ })
   }, [lastEmail])
 
-  // Local bookings not yet synced to the backend
-  const localActive = bookings.filter((b) => b.status !== 'cancelled' && !b.backendId)
+  // IDs already held in local store (avoids duplicates when backend returns same booking)
+  const localIds = new Set(bookings.map((b) => b.id))
 
-  // Backend bookings (deduped against local store)
+  // Backend bookings not already in local store
   const realActive = realBookings.filter(
-    (rb) => rb.status !== 'cancelled' &&
-      !bookings.some((lb) => lb.backendId === rb.backendId),
+    (rb) => rb.status !== 'cancelled' && !localIds.has(rb.id),
   )
+
+  // Local store bookings (may include bookings just confirmed this session)
+  const localActive = bookings.filter((b) => b.status !== 'cancelled')
 
   const allActive = [...realActive, ...localActive]
 

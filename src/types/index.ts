@@ -1,7 +1,5 @@
 export interface Doctor {
-  id: string
-  /** Numeric primary key on the backend (used when creating a booking) */
-  backendId: number
+  id: string   // UUID from the backend
   name: string
   specialty: string
   experience: string
@@ -33,8 +31,6 @@ export interface PatientDetails {
 
 export interface Booking {
   id: string
-  /** Backend integer ID returned after real booking creation */
-  backendId?: number
   doctor: Doctor
   slot: TimeSlot
   patient: PatientDetails

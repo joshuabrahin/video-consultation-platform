@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Query } from '@nestjs/common'
 import { BookingService } from './booking.service.js'
-import type { VideoConsultationDto } from './booking.service.js'
+import { VideoConsultationDto } from './dto/create-booking.dto.js'
 
 @Controller('bookings')
 export class BookingController {
@@ -8,8 +8,8 @@ export class BookingController {
 
   // No auth required — open booking endpoint
   @Post('video-consultation')
-  createVideoConsultation(@Body() body: VideoConsultationDto) {
-    return this.bookingService.createVideoConsultation(body)
+  createVideoConsultation(@Body() dto: VideoConsultationDto) {
+    return this.bookingService.createVideoConsultation(dto)
   }
 
   // Look up bookings by patient email (used by UpcomingConsultations on home screen)

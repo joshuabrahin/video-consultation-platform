@@ -184,9 +184,9 @@ export class ChatService {
 
     // ── Summarize: try to return real data first ──────────────────────────
     if (intent === 'summarize') {
-      const bookingId = context?.bookingId ? parseInt(context.bookingId, 10) : null
+      const bookingId = context?.bookingId?.trim() ?? null
 
-      if (!bookingId || isNaN(bookingId)) {
+      if (!bookingId) {
         return MOCK.summaryNoBooking
       }
 

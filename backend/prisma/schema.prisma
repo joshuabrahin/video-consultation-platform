@@ -7,52 +7,94 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Hospital
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Hospital {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(uuid())
   name      String
   location  String
   createdAt DateTime @default(now())
-  doctors   Doctor[]
+  updatedAt DateTime @updatedAt
+
+  doctors Doctor[]
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Doctor
+// ─────────────────────────────────────────────────────────────────────────────
 
 model Doctor {
-  id             Int       @id @default(autoincrement())
+  id             String  @id @default(uuid())
   name           String
   specialization String
-  calendarId     String?
-  hospitalId     Int
-  hospital       Hospital  @relation(fields: [hospitalId], references: [id])
-  bookings       Booking[]
+  calendarEmail  String? // Google Calendar email for scheduling (e.g. doctor@hospital.com)
+  hospitalId     String
+
+  hospital Hospital  @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
+  bookings Booking[]
+
+  @@index([hospitalId])
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// User  (authenticated patients)
+// ─────────────────────────────────────────────────────────────────────────────
+
 model User {
-  id       Int       @id @default(autoincrement())
-  name     String
-  email    String    @unique
-  password String
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+
   bookings Booking[]
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Booking
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Booking {
-  id           Int           @id @default(autoincrement())
+  id           String        @id @default(uuid())
+  // Patient details (stored directly — userId is optional for guest bookings)
   name         String
-  patientEmail String?
+  patientEmail String
   problem      String
   prescription String?
-  date         DateTime
-  meetLink     String
-  status       BookingStatus @default(UPCOMING)
-  recallBotId  String?
-  transcript   String?
-  summary      String?
-  userId       Int?
-  doctorId     Int
-  user         User?         @relation(fields: [userId], references: [id])
-  doctor       Doctor        @relation(fields: [doctorId], references: [id])
+
+  // Scheduling
+  date     DateTime
+  meetLink String
+
+  // Status lifecycle
+  status BookingStatus @default(UPCOMING)
+
+  // Recall.ai bot integration
+  recallBotId String?
+  transcript  String? // Raw transcript text from Recall.ai
+  summary     String? // AI-generated consultation summary
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId   String? // null for guest (unauthenticated) bookings
+  doctorId String
+
+  user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Restrict)
 
   @@index([doctorId, date])
   @@index([patientEmail])
+  @@index([userId])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
 
 enum BookingStatus {
   UPCOMING

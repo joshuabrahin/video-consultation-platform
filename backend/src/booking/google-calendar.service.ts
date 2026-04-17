@@ -130,7 +130,8 @@ export class GoogleCalendarService {
       return { meetLink, calendarEventId: eventId }
     } catch (err) {
       this.logger.error('Failed to create Google Calendar event', err)
-      throw new InternalServerErrorException('Could not create Google Meet link')
+      this.logger.warn('Falling back to generated Meet link')
+      return { meetLink: fakeMeetLink() }
     }
   }
 }

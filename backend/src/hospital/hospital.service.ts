@@ -10,6 +10,13 @@ export class HospitalService {
   }
 
   async findAll() {
-    return this.prisma.db.hospital.findMany()
+    return this.prisma.db.hospital.findMany({
+      include: {
+        doctors: {
+          orderBy: { name: 'asc' },
+        },
+      },
+      orderBy: { name: 'asc' },
+    })
   }
 }

@@ -33,7 +33,7 @@ export class RecallService {
   async scheduleBot(
     meetingUrl: string,
     joinAt: Date,
-    bookingId: number,
+    bookingId: string,
   ): Promise<string | null> {
     const apiKey = process.env.RECALL_API_KEY
     if (!apiKey) {
