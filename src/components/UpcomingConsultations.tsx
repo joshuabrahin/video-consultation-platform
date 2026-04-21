@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { format, parseISO } from 'date-fns'
-import { Calendar, Clock, User, Mail, FileText, Video, X, Stethoscope } from 'lucide-react'
+import { Calendar, Clock, User, Mail, FileText, Video, X, Stethoscope, MessageCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useBookingStore } from '../store/bookingStore'
-import { apiGet } from '../lib/api'
+import { useChatStore } from '../store/useChatStore'
+import { apiGet, apiPatch } from '../lib/api'
 import { Button } from './ui/Button'
 import { Badge } from './ui/Badge'
 import { Avatar } from './ui/Avatar'
@@ -90,8 +91,32 @@ function adaptBackendBooking(b: BackendBooking): Booking {
 // BookingCard
 // ─────────────────────────────────────────────────────────────────────────────
 
-function BookingCard({ booking, isReal }: { booking: Booking; isReal?: boolean }) {
+function BookingCard({ booking, isReal, onCancelled }: { booking: Booking; isReal?: boolean; onCancelled?: (id: string) => void }) {
   const cancelBooking = useBookingStore((s) => s.cancelBooking)
+  const { setContext, toggleChat } = useChatStore()
+  const [cancelling, setCancelling] = useState(false)
+
+  function openChat() {
+    setContext({ bookingId: booking.id, doctorName: booking.doctor.name })
+    toggleChat()
+  }
+
+  async function handleCancel() {
+    if (!confirm('Cancel this booking?')) return
+    if (isReal) {
+      setCancelling(true)
+      try {
+        await apiPatch(`/bookings/${booking.id}/cancel`)
+        onCancelled?.(booking.id)
+      } catch {
+        alert('Failed to cancel booking. Please try again.')
+      } finally {
+        setCancelling(false)
+      }
+    } else {
+      cancelBooking(booking.id)
+    }
+  }
 
   const dateLabel = (() => {
     try {
@@ -197,14 +222,20 @@ function BookingCard({ booking, isReal }: { booking: Booking; isReal?: boolean }
               Join Now
             </button>
           </a>
-          {!isReal && (
-            <button
-              onClick={() => cancelBooking(booking.id)}
-              className="w-10 h-10 flex items-center justify-center rounded-xl border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-500 transition-colors cursor-pointer"
-            >
-              <X size={16} />
-            </button>
-          )}
+          <button
+            onClick={openChat}
+            title="Chat about this consultation"
+            className="w-10 h-10 flex items-center justify-center rounded-xl border border-teal-100 text-teal-500 hover:bg-teal-50 hover:text-teal-600 transition-colors cursor-pointer"
+          >
+            <MessageCircle size={16} />
+          </button>
+          <button
+            onClick={handleCancel}
+            disabled={cancelling}
+            className="w-10 h-10 flex items-center justify-center rounded-xl border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <X size={16} />
+          </button>
         </div>
       </div>
     </div>
@@ -219,6 +250,10 @@ export function UpcomingConsultations() {
   const navigate = useNavigate()
   const { bookings } = useBookingStore()
   const [realBookings, setRealBookings] = useState<Booking[]>([])
+
+  const handleRealCancelled = useCallback((id: string) => {
+    setRealBookings((prev) => prev.filter((b) => b.id !== id))
+  }, [])
 
   // Derive the most recently used patient email from local bookings
   // so we can fetch the latest DB state without requiring login
@@ -280,7 +315,7 @@ export function UpcomingConsultations() {
             ) : (
               <div className="flex flex-col gap-4">
                 {realActive.map((b) => (
-                  <BookingCard key={b.id} booking={b} isReal />
+                  <BookingCard key={b.id} booking={b} isReal onCancelled={handleRealCancelled} />
                 ))}
                 {localActive.map((b) => (
                   <BookingCard key={b.id} booking={b} isReal={false} />

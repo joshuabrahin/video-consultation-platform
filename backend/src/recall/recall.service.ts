@@ -24,7 +24,7 @@ export interface RecallTranscriptEntry {
 @Injectable()
 export class RecallService {
   private readonly logger = new Logger(RecallService.name)
-  private readonly apiBase = 'https://api.recall.ai/api/v1'
+  private readonly apiBase = 'https://api.ap-northeast-1.recall.ai/api/v1'
 
   /**
    * Sends a Recall.ai bot to join a Google Meet call.

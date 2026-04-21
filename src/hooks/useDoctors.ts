@@ -97,7 +97,7 @@ function mapDoctor(api: ApiDoctor): Doctor {
     calendarEmail: api.calendarEmail ?? '',
     avatar:        toInitials(api.name),
     isVerified:    true,
-    availableSlots: generateSlots(api.id),
+    availableSlots: [], // fetched from DB per date in SlotSelectionPage
     // UI-only defaults (not stored in DB)
     experience:   'Experienced specialist',
     languages:    ['English'],

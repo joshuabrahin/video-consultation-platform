@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, Logger } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { google } from 'googleapis'
 
 export interface CreateMeetingParams {
@@ -119,24 +119,6 @@ export class GoogleCalendarService {
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
     const end = new Date(params.start.getTime() + 30 * 60 * 1000)
-
-    // ── freebusy check ────────────────────────────────────────────────────────
-    try {
-      const fbRes = await calendar.freebusy.query({
-        requestBody: {
-          timeMin: params.start.toISOString(),
-          timeMax: end.toISOString(),
-          items: [{ id: calendarId }],
-        },
-      })
-      const busy = fbRes.data.calendars?.[calendarId]?.busy ?? []
-      if (busy.length > 0) {
-        throw new ConflictException('This time slot is already booked on the calendar')
-      }
-    } catch (err) {
-      if (err instanceof ConflictException) throw err
-      this.logger.warn('freebusy check skipped')
-    }
 
     // ── create event with real Google Meet link ───────────────────────────────
     const attendees: { email: string; displayName?: string }[] = [

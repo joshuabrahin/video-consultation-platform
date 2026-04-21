@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service.js'
+import { AiService } from '../ai/ai.service.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -168,7 +169,10 @@ function detectIntent(messages: ChatMessageDto[]): ResponseKey {
 
 @Injectable()
 export class ChatService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ai: AiService,
+  ) {}
 
   /**
    * Resolves the correct response text for streaming.
@@ -217,22 +221,19 @@ export class ChatService {
       return MOCK.summaryPending(booking.doctor.name)
     }
 
-    // ── All other intents use static mock responses ───────────────────────
-    switch (intent) {
-      case 'greeting':
-        return MOCK.greeting
-      case 'prescription':
-        return MOCK.prescription
-      case 'upcoming':
-        return MOCK.upcoming
-      case 'bookFollowUp':
-        return MOCK.bookFollowUp
-      case 'meetLink':
-        return MOCK.meetLink
-      case 'afterCare':
-        return MOCK.afterCare
-      default:
-        return MOCK.fallback(lastUserMsg?.content ?? 'your question')
-    }
+    // ── Use Gemini for all other responses ───────────────────────────────
+    const systemPrompt = `You are an AI Medical Assistant for The Right Hand telemedicine platform.
+You help patients with:
+- Consultation summaries and what was discussed with their doctor
+- Understanding prescriptions and medications
+- Upcoming appointment information
+- How to join video consultations
+- General post-consultation advice and next steps
+
+Be empathetic, concise, and use markdown formatting.
+Always remind patients to follow their doctor's specific advice.
+Never diagnose conditions or recommend specific medications.`
+
+    return this.ai.chat(messages, systemPrompt)
   }
 }

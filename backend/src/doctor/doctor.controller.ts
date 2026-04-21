@@ -1,13 +1,11 @@
 import { Controller, Get, Post, Body, Param, Query, BadRequestException } from '@nestjs/common'
 import { DoctorService } from './doctor.service.js'
-import { GoogleCalendarService } from '../booking/google-calendar.service.js'
 import { CreateDoctorDto } from './dto/create-doctor.dto.js'
 
 @Controller('doctors')
 export class DoctorController {
   constructor(
     private readonly doctorService: DoctorService,
-    private readonly googleCalendar: GoogleCalendarService,
   ) {}
 
   @Post()
@@ -37,17 +35,4 @@ export class DoctorController {
     return this.doctorService.getSlotsForDate(id, date)
   }
 
-  // Returns slot availability based on doctor's real Google Calendar
-  @Get(':id/availability')
-  async getAvailability(
-    @Param('id') id: string,
-    @Query('date') date: string,
-  ) {
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      throw new BadRequestException('date query param required (YYYY-MM-DD)')
-    }
-    const doctor = await this.doctorService.findById(id)
-    if (!doctor?.calendarEmail) return []
-    return this.googleCalendar.getAvailability(doctor.calendarEmail, date)
-  }
 }

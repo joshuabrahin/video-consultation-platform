@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Param } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Body, Query, Param } from '@nestjs/common'
 import { BookingService } from './booking.service.js'
 import { VideoConsultationDto } from './dto/create-booking.dto.js'
 
@@ -23,5 +23,10 @@ export class BookingController {
   @Get('booked-slots/:doctorId')
   getBookedSlots(@Param('doctorId') doctorId: string) {
     return this.bookingService.getBookedSlots(doctorId)
+  }
+
+  @Patch(':id/cancel')
+  cancelBooking(@Param('id') id: string) {
+    return this.bookingService.cancelBooking(id)
   }
 }

@@ -97,8 +97,6 @@ export function DoctorSelectionPage() {
       {/* Doctor cards */}
       <div className="flex flex-col gap-5">
         {doctors.map((doctor) => {
-          const available = doctor.availableSlots.filter((s) => s.available).length
-
           return (
             <div
               key={doctor.id}
@@ -123,14 +121,8 @@ export function DoctorSelectionPage() {
                         <CheckCircle2 size={18} className="text-teal-500 flex-shrink-0" />
                       )}
                     </div>
-                    <span
-                      className={`text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wide flex-shrink-0 ${
-                        available > 0
-                          ? 'bg-teal-50 text-teal-700'
-                          : 'bg-gray-100 text-gray-400'
-                      }`}
-                    >
-                      {available} Slots Available
+                    <span className="text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wide flex-shrink-0 bg-teal-50 text-teal-700">
+                      Slots Available
                     </span>
                   </div>
 
@@ -186,8 +178,7 @@ export function DoctorSelectionPage() {
 
                     <button
                       onClick={() => selectDoctor(doctor)}
-                      disabled={available === 0}
-                      className="flex items-center gap-2 bg-gray-900 hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-colors cursor-pointer"
+                      className="flex items-center gap-2 bg-gray-900 hover:bg-gray-700 text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-colors cursor-pointer"
                     >
                       <Video size={15} />
                       Book Video Consultation

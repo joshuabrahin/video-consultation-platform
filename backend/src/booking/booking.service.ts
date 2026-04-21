@@ -2,6 +2,7 @@ import { Injectable, ConflictException, NotFoundException, ServiceUnavailableExc
 import { PrismaService } from '../prisma/prisma.service.js'
 import { GoogleCalendarService } from './google-calendar.service.js'
 import { RecallService } from '../recall/recall.service.js'
+import { EmailService } from '../email/email.service.js'
 import { VideoConsultationDto } from './dto/create-booking.dto.js'
 
 export { VideoConsultationDto }
@@ -16,6 +17,7 @@ export class BookingService {
     private readonly prisma: PrismaService,
     private readonly googleCalendar: GoogleCalendarService,
     private readonly recall: RecallService,
+    private readonly email: EmailService,
   ) {}
 
   async createVideoConsultation(dto: VideoConsultationDto) {
@@ -50,23 +52,18 @@ export class BookingService {
       throw err
     }
 
-    // 3. Transaction: DB-level 30-minute overlap check + atomic insert
+    // 3. Transaction: exact-slot conflict check + atomic insert
     const booking = await this.prisma.db.$transaction(async (tx) => {
-      const windowStart = new Date(startDate.getTime() - 29 * 60 * 1000)
-      const windowEnd   = new Date(startDate.getTime() + 29 * 60 * 1000)
-
       const conflict = await tx.booking.findFirst({
         where: {
           doctorId: dto.doctor.id,
-          date: { gte: windowStart, lte: windowEnd },
+          date: startDate,
           status: { not: 'CANCELLED' },
         },
       })
 
       if (conflict) {
-        throw new ConflictException(
-          'This doctor already has a booking within 30 minutes of the requested slot.',
-        )
+        throw new ConflictException('This slot has already been booked.')
       }
 
       // Mark matching slot as booked
@@ -104,6 +101,17 @@ export class BookingService {
       })
     }
 
+    // 6. Email the doctor with the Meet link
+    await this.email.sendDoctorBookingNotification({
+      doctorEmail:  bookingFull.doctor.calendarEmail ?? '',
+      doctorName:   bookingFull.doctor.name,
+      patientName:  bookingFull.name,
+      patientEmail: bookingFull.patientEmail,
+      date:         bookingFull.date,
+      meetLink:     bookingFull.meetLink,
+      problem:      bookingFull.problem,
+    })
+
     return {
       id:              bookingFull.id,
       meetLink:        bookingFull.meetLink,
@@ -130,6 +138,26 @@ export class BookingService {
       where: { id: bookingId },
       include: { doctor: true },
     })
+  }
+
+  async cancelBooking(bookingId: string) {
+    const booking = await this.prisma.db.booking.findUnique({
+      where: { id: bookingId },
+    })
+    if (!booking) throw new NotFoundException('Booking not found')
+
+    await this.prisma.db.$transaction([
+      this.prisma.db.booking.update({
+        where: { id: bookingId },
+        data: { status: 'CANCELLED' },
+      }),
+      this.prisma.db.slot.updateMany({
+        where: { doctorId: booking.doctorId, startAt: booking.date },
+        data: { isBooked: false },
+      }),
+    ])
+
+    return { success: true }
   }
 
   async getBookedSlots(doctorId: string): Promise<string[]> {

@@ -93,18 +93,30 @@ export function ConfirmationPage() {
       try {
         const startISO = slotToISO(selectedSlot.date, selectedSlot.startTime)
 
+        // Convert prescription file to base64 string if one was attached
+        let prescriptionStr: string | undefined
+        if (patientDetails.prescription instanceof File) {
+          const file = patientDetails.prescription
+          prescriptionStr = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(`${file.name}|${(reader.result as string).split(',')[1]}`)
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          })
+        } else if (typeof patientDetails.prescription === 'string') {
+          prescriptionStr = patientDetails.prescription
+        }
+
         const data = await apiPost<CreateBookingResponse>('/bookings/video-consultation', {
           doctor: {
-            id: selectedDoctor.id,           // UUID string from DB
+            id: selectedDoctor.id,
             calendarEmail: selectedDoctor.calendarEmail,
           },
           patient: {
-            name:    patientDetails.name,
-            email:   patientDetails.email,
-            problem: patientDetails.problem,
-            ...(patientDetails.prescription instanceof File
-              ? {}
-              : { prescription: patientDetails.prescription ?? undefined }),
+            name:         patientDetails.name,
+            email:        patientDetails.email,
+            problem:      patientDetails.problem,
+            prescription: prescriptionStr,
           },
           start: startISO,
         })

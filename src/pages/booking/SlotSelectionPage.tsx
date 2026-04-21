@@ -62,15 +62,13 @@ export function SlotSelectionPage() {
     setLoading(true)
     fetch(`/api/doctors/${selectedDoctor.id}/slots?date=${activeDateStr}`)
       .then((r) => r.json() as Promise<DbSlot[]>)
-      .then((data) => setSlots(data.map(dbSlotToTimeSlot)))
+      .then((data) => setSlots(data.filter((s) => !s.isBooked).map(dbSlotToTimeSlot)))
       .catch(() => setSlots([]))
       .finally(() => setLoading(false))
   }, [selectedDoctor?.id, activeDateStr])
 
   if (!selectedDoctor) return null
 
-  const availableSlots   = slots.filter((s) => s.available)
-  const unavailableSlots = slots.filter((s) => !s.available)
 
   return (
     <div>
@@ -138,26 +136,16 @@ export function SlotSelectionPage() {
               </div>
             ) : (
               <div className="grid grid-cols-4 gap-3">
-                {slots.map((slot) =>
-                  slot.available ? (
-                    <button
-                      key={slot.id}
-                      onClick={() => selectSlot(slot)}
-                      className="flex flex-col items-center gap-0.5 py-4 px-3 rounded-xl border-2 border-gray-200 bg-white text-sm font-semibold transition-all hover:border-teal-400 hover:bg-teal-50 hover:text-teal-700 cursor-pointer"
-                    >
-                      <span className="text-base font-bold">{slot.startTime}</span>
-                      <span className="text-xs text-gray-400">to {slot.endTime}</span>
-                    </button>
-                  ) : (
-                    <div
-                      key={slot.id}
-                      className="flex flex-col items-center gap-0.5 py-4 px-3 rounded-xl border border-dashed border-red-100 bg-red-50 cursor-not-allowed"
-                    >
-                      <span className="text-base font-bold text-gray-300 line-through">{slot.startTime}</span>
-                      <span className="text-xs text-red-400 font-bold tracking-wide">Booked</span>
-                    </div>
-                  )
-                )}
+                {slots.map((slot) => (
+                  <button
+                    key={slot.id}
+                    onClick={() => selectSlot(slot)}
+                    className="flex flex-col items-center gap-0.5 py-4 px-3 rounded-xl border-2 border-gray-200 bg-white text-sm font-semibold transition-all hover:border-teal-400 hover:bg-teal-50 hover:text-teal-700 cursor-pointer"
+                  >
+                    <span className="text-base font-bold">{slot.startTime}</span>
+                    <span className="text-xs text-gray-400">to {slot.endTime}</span>
+                  </button>
+                ))}
               </div>
             )}
           </div>

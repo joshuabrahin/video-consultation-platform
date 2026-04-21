@@ -29,13 +29,31 @@ model Doctor {
   id             String  @id @default(uuid())
   name           String
   specialization String
-  calendarEmail  String? // Google Calendar email for scheduling (e.g. doctor@hospital.com)
+  calendarEmail  String?
   hospitalId     String
 
   hospital Hospital  @relation(fields: [hospitalId], references: [id], onDelete: Restrict)
   bookings Booking[]
+  slots    Slot[]
 
   @@index([hospitalId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slot  (pre-defined available time windows per doctor)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Slot {
+  id       String   @id @default(uuid())
+  doctorId String
+  startAt  DateTime
+  endAt    DateTime
+  isBooked Boolean  @default(false)
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, startAt])
+  @@index([doctorId, startAt])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
